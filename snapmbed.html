@@ -301,6 +301,62 @@
     color: var(--accent2);
     margin-left: 6px;
   }
+
+  /* Output mode radio group */
+  .radio-group {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .radio-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.15s;
+    color: var(--muted);
+  }
+  .radio-pill input { display: none; }
+  .radio-pill:has(input:checked) {
+    border-color: var(--accent);
+    background: rgba(124,106,247,0.12);
+    color: var(--accent2);
+  }
+  .radio-pill .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--muted);
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .radio-pill:has(input:checked) .dot {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+
+  /* Folder structure preview */
+  .folder-preview {
+    background: #0a0a0c;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 10px;
+    line-height: 1.9;
+    display: none;
+  }
+  .folder-preview .dir { color: var(--blue); }
+  .folder-preview .file { color: var(--text); margin-left: 16px; }
+  .folder-preview .file::before { content: "└─ "; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -329,27 +385,7 @@
 
   <!-- Step 2: Options -->
   <div class="card">
-    <div class="card-title">Step 2 — Options</div>
-    <div class="option-row">
-      <label>
-        Overwrite originals in-place
-        <span class="desc">Writes metadata directly into your existing files. Your original ZIP is your backup.</span>
-      </label>
-      <label class="toggle">
-        <input type="checkbox" id="opt-overwrite" checked>
-        <span class="toggle-slider"></span>
-      </label>
-    </div>
-    <div class="option-row">
-      <label>
-        Also save a ZIP of all processed files
-        <span class="desc">Downloads a ZIP with only the files that were modified.</span>
-      </label>
-      <label class="toggle">
-        <input type="checkbox" id="opt-zip">
-        <span class="toggle-slider"></span>
-      </label>
-    </div>
+    <div class="card-title">Step 2 — Metadata Options</div>
     <div class="option-row">
       <label>
         Merge mode: only fill in missing EXIF fields
@@ -382,9 +418,81 @@
     </div>
   </div>
 
-  <!-- Step 3: Run -->
+  <!-- Step 3: Output Mode -->
   <div class="card">
-    <div class="card-title">Step 3 — Process</div>
+    <div class="card-title">Step 3 — Output Mode</div>
+    <div class="radio-group">
+      <label class="radio-pill">
+        <input type="radio" name="output-mode" value="inplace" id="out-inplace" checked>
+        <span class="dot"></span>
+        ✏️ Overwrite in-place
+      </label>
+      <label class="radio-pill">
+        <input type="radio" name="output-mode" value="zip" id="out-zip">
+        <span class="dot"></span>
+        📦 Download as ZIP
+      </label>
+      <label class="radio-pill">
+        <input type="radio" name="output-mode" value="both" id="out-both">
+        <span class="dot"></span>
+        ✏️ + 📦 Both
+      </label>
+    </div>
+    <p style="color:var(--muted);font-size:12px;margin-top:10px;">
+      <strong style="color:var(--text)">Overwrite in-place</strong> — writes directly back to your files on disk using File System Access API. Browser will ask you to confirm the folder.<br>
+      <strong style="color:var(--text)">Download as ZIP</strong> — packages all modified images into a ZIP you can save anywhere. Originals are untouched.<br>
+      <strong style="color:var(--text)">Both</strong> — writes in-place AND downloads ZIP as a backup.
+    </p>
+  </div>
+
+  <!-- Step 4: Organise -->
+  <div class="card">
+    <div class="card-title">Step 4 — Organise by Date <span class="tag">optional</span></div>
+    <div class="option-row">
+      <label>
+        Organise files into dated folders
+        <span class="desc">Renames and sorts processed images into a folder structure based on the photo's date taken.</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="opt-organise">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div id="organise-sub" style="display:none; padding-top: 8px;">
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px;">Folder structure:</p>
+      <div class="radio-group">
+        <label class="radio-pill">
+          <input type="radio" name="org-structure" value="year-month" id="org-ym" checked>
+          <span class="dot"></span>
+          Year / Month
+        </label>
+        <label class="radio-pill">
+          <input type="radio" name="org-structure" value="year" id="org-y">
+          <span class="dot"></span>
+          Year only
+        </label>
+        <label class="radio-pill">
+          <input type="radio" name="org-structure" value="year-month-day" id="org-ymd">
+          <span class="dot"></span>
+          Year / Month / Day
+        </label>
+      </div>
+      <div class="folder-preview" id="org-preview">
+        <span class="dir">📁 2024/</span><br>
+        <span class="dir" style="margin-left:16px;">📁 03 - March/</span><br>
+        <span class="file">IMG_001.jpg</span><br>
+        <span class="file">IMG_002.jpg</span><br>
+        <span class="dir">📁 2023/</span><br>
+        <span class="dir" style="margin-left:16px;">📁 11 - November/</span><br>
+        <span class="file">Photo_005.jpg</span>
+      </div>
+      <p style="font-size:11px;color:var(--muted);margin-top:8px;">⚠️ Organised output is always included in the ZIP download. Images without a date are placed in <code style="background:var(--surface2);padding:1px 5px;border-radius:3px;">undated/</code>.</p>
+    </div>
+  </div>
+
+  <!-- Step 5: Run -->
+  <div class="card">
+    <div class="card-title">Step 5 — Process</div>
     <div class="btn-row">
       <button class="btn btn-primary" id="btn-run" disabled>▶ &nbsp;Start Processing</button>
       <button class="btn btn-secondary" id="btn-clear" disabled>✕ &nbsp;Clear</button>
@@ -407,6 +515,7 @@
     <div class="stat"><div class="stat-num yellow" id="s-skipped">0</div><div class="stat-label">Already complete / skipped</div></div>
     <div class="stat"><div class="stat-num blue" id="s-nojson">0</div><div class="stat-label">No JSON sidecar found</div></div>
     <div class="stat"><div class="stat-num red" id="s-err">0</div><div class="stat-label">Errors</div></div>
+    <div class="stat" id="s-org-wrap" style="display:none"><div class="stat-num" style="color:#34d399" id="s-org">0</div><div class="stat-label">Organised into folders</div></div>
     <div class="stat"><div class="stat-num purple" id="s-total">0</div><div class="stat-label">Total images scanned</div></div>
   </div>
 
@@ -734,29 +843,51 @@ function handleFiles(fileList){
     if(lower.endsWith(".json"))jsonCount++;
   }
   /* Build JSON map: for each JSON sidecar, find matching image */
-  /* Google Takeout naming: Photo.jpg -> Photo.jpg.json  OR  Photo.json */
+  /* Supports both old-style (.jpg.json) and new Google Takeout style (.jpg.supplemental-metadata.json, .jpg.supp.json, etc.) */
   Object.keys(allFiles).forEach(path=>{
     var lower=path.toLowerCase();
     if(!lower.endsWith(".json"))return;
-    /* Try: strip .json to get image path */
-    var img_path=path.slice(0,-5);
-    if(allFiles[img_path]){
-      jsonMap[img_path]=allFiles[path];
-      return;
+    var imgPath=null;
+    /* Pattern 1: exact strip — Photo.jpg.json -> Photo.jpg */
+    var stripped=path.slice(0,-5);
+    if(allFiles[stripped]){imgPath=stripped;}
+    /* Pattern 2: supplemental-metadata — Photo.jpg.supplemental-metadata.json -> Photo.jpg */
+    if(!imgPath){
+      var m=path.match(/^(.+\.(jpg|jpeg|JPG|JPEG|png|PNG|webp|WEBP|heic|HEIC|mp4|MP4|jfif|JFIF))\.supplemental-metadata\.json$/i);
+      if(m&&allFiles[m[1]])imgPath=m[1];
     }
-    /* Try: replace .json with .jpg */
-    var base=path.slice(0,-5);
-    var candidates=[base+".jpg",base+".jpeg",base+".JPG",base+".JPEG"];
-    candidates.forEach(c=>{if(allFiles[c]&&!jsonMap[c])jsonMap[c]=allFiles[path];});
+    /* Pattern 3: truncated supplemental — Photo.jpg.supp.json or Photo.jpg.supplem.json etc. */
+    if(!imgPath){
+      var m2=path.match(/^(.+\.(jpg|jpeg|JPG|JPEG|png|PNG|webp|WEBP|heic|HEIC|mp4|MP4|jfif|JFIF))\.supp(?:l(?:e(?:m(?:e(?:n(?:t(?:a(?:l(?:-metadata)?)?)?)?)?)?)?)?)?\.json$/i);
+      if(m2&&allFiles[m2[1]])imgPath=m2[1];
+    }
+    /* Pattern 4: Google truncates long filenames — strip any suffix after last known image ext before .json */
+    if(!imgPath){
+      var m3=path.match(/^(.+\.(jpg|jpeg|JPG|JPEG|png|PNG|webp|WEBP|heic|HEIC|mp4|MP4|jfif|JFIF))[^\/\\]*\.json$/i);
+      if(m3&&allFiles[m3[1]])imgPath=m3[1];
+    }
+    /* Pattern 5: base name without extension — Photo.json -> Photo.jpg */
+    if(!imgPath){
+      var base=path.slice(0,-5);
+      var candidates=[base+".jpg",base+".jpeg",base+".JPG",base+".JPEG",base+".png",base+".PNG",base+".heic",base+".HEIC",base+".webp",base+".WEBP",base+".jfif",base+".JFIF"];
+      candidates.forEach(c=>{if(!imgPath&&allFiles[c])imgPath=c;});
+    }
+    if(imgPath&&!jsonMap[imgPath])jsonMap[imgPath]=allFiles[path];
   });
-  /* Collect image files that are JPG/JPEG */
+  /* Collect image files that are JPG/JPEG (the only format we can embed EXIF into) */
   Object.keys(allFiles).forEach(path=>{
     var lower=path.toLowerCase();
     if(lower.endsWith(".jpg")||lower.endsWith(".jpeg"))imageFiles.push(path);
   });
+  /* Count non-JPEG files that have JSON sidecars (informational) */
+  var nonJpegMatched=0;
+  Object.keys(jsonMap).forEach(function(p){var l=p.toLowerCase();if(!l.endsWith(".jpg")&&!l.endsWith(".jpeg"))nonJpegMatched++;});
+  var jpegMatchedCount=Object.keys(jsonMap).filter(function(p){var l=p.toLowerCase();return l.endsWith(".jpg")||l.endsWith(".jpeg");}).length;
   var infoEl=document.getElementById("folder-info");
   infoEl.style.display="block";
-  infoEl.innerHTML="<strong>"+imageFiles.length+"</strong> JPEG images found &nbsp;•&nbsp; <strong>"+Object.keys(jsonMap).length+"</strong> JSON sidecars matched &nbsp;•&nbsp; <strong>"+(imageFiles.length-Object.keys(jsonMap).length)+"</strong> images without JSON (will be skipped)";
+  var infoMsg="<strong>"+imageFiles.length+"</strong> JPEG images found &nbsp;•&nbsp; <strong>"+jpegMatchedCount+"</strong> JSON sidecars matched &nbsp;•&nbsp; <strong>"+(imageFiles.length-jpegMatchedCount)+"</strong> without JSON";
+  if(nonJpegMatched>0)infoMsg+=" &nbsp;•&nbsp; <span style='color:var(--yellow)'>"+nonJpegMatched+" non-JPEG files (HEIC/PNG/MP4 etc.) skipped</span>";
+  infoEl.innerHTML=infoMsg;
   runBtn.disabled=imageFiles.length===0;
   clearBtn.disabled=false;
 }
@@ -769,6 +900,7 @@ document.getElementById("btn-clear").addEventListener("click",()=>{
   document.getElementById("log-wrap").style.display="none";
   document.getElementById("stats-bar").style.display="none";
   document.getElementById("done-banner").style.display="none";
+  document.getElementById("s-org-wrap").style.display="none";
   logEl.innerHTML="";
   runBtn.disabled=true;clearBtn.disabled=true;
   folderInput.value="";
@@ -851,17 +983,57 @@ async function processImage(imgPath,jsonFile,opts){
     /* Encode new EXIF */
     var new_exif=piexif._encodeExif(exif_dict);
     var new_jpeg=piexif.insert(new_exif,imgArr);
-    return{status:"ok",data:new_jpeg,path:imgPath};}
+    var ts_used=(meta.photoTakenTime&&meta.photoTakenTime.timestamp)?meta.photoTakenTime.timestamp:null;
+    return{status:"ok",data:new_jpeg,path:imgPath,meta_ts:ts_used};}
   catch(e){return{status:"err",msg:String(e)};}}
+
+/* ---- Organise toggle UI ---- */
+document.getElementById("opt-organise").addEventListener("change",function(){
+  document.getElementById("organise-sub").style.display=this.checked?"block":"none";
+  if(this.checked){
+    document.getElementById("org-preview").style.display="block";
+    updateOrgPreview();
+  }
+});
+document.querySelectorAll("input[name=org-structure]").forEach(function(r){r.addEventListener("change",updateOrgPreview);});
+function updateOrgPreview(){
+  var mode=document.querySelector("input[name=org-structure]:checked").value;
+  var preview=document.getElementById("org-preview");
+  if(mode==="year"){
+    preview.innerHTML='<span class="dir">📁 2024/</span><br><span class="file">IMG_001.jpg</span><br><span class="file">IMG_002.jpg</span><br><span class="dir">📁 2023/</span><br><span class="file">Photo_005.jpg</span>';
+  }else if(mode==="year-month"){
+    preview.innerHTML='<span class="dir">📁 2024/</span><br><span class="dir" style="margin-left:16px;">📁 03 - March/</span><br><span class="file">IMG_001.jpg</span><br><span class="file">IMG_002.jpg</span><br><span class="dir">📁 2023/</span><br><span class="dir" style="margin-left:16px;">📁 11 - November/</span><br><span class="file">Photo_005.jpg</span>';
+  }else{
+    preview.innerHTML='<span class="dir">📁 2024/</span><br><span class="dir" style="margin-left:16px;">📁 03 - March/</span><br><span class="dir" style="margin-left:32px;">📁 15/</span><br><span class="file">IMG_001.jpg</span><br><span class="dir" style="margin-left:32px;">📁 16/</span><br><span class="file">IMG_002.jpg</span>';
+  }
+}
+
+/* ---- Helper: build organised path from date and original filename ---- */
+var MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+function organisedPath(ts, origFilename, structure){
+  var pad=function(n){return String(n).padStart(2,"0");};
+  var fn=origFilename.split("/").pop();
+  if(!ts)return"undated/"+fn;
+  var d=new Date(parseInt(ts)*1000);
+  var yr=d.getFullYear();
+  var mo=d.getMonth();
+  var dy=d.getDate();
+  if(structure==="year")return yr+"/"+fn;
+  if(structure==="year-month")return yr+"/"+pad(mo+1)+" - "+MONTHS[mo]+"/"+fn;
+  return yr+"/"+pad(mo+1)+" - "+MONTHS[mo]+"/"+pad(dy)+"/"+fn;
+}
 
 /* ---- Run ---- */
 document.getElementById("btn-run").addEventListener("click",async function(){
   runBtn.disabled=true;
+  var outputMode=document.querySelector("input[name=output-mode]:checked").value;
   var opts={
-    overwrite:document.getElementById("opt-overwrite").checked,
-    zip:document.getElementById("opt-zip").checked,
+    overwrite:(outputMode==="inplace"||outputMode==="both"),
+    zip:(outputMode==="zip"||outputMode==="both"),
     gps:document.getElementById("opt-gps").checked,
-    people:document.getElementById("opt-people").checked
+    people:document.getElementById("opt-people").checked,
+    organise:document.getElementById("opt-organise").checked,
+    orgStructure:document.querySelector("input[name=org-structure]:checked")?document.querySelector("input[name=org-structure]:checked").value:"year-month"
   };
   logEl.innerHTML="";
   document.getElementById("log-wrap").style.display="block";
@@ -870,7 +1042,8 @@ document.getElementById("btn-run").addEventListener("click",async function(){
   document.getElementById("done-banner").style.display="none";
   var fill=document.getElementById("progress-fill");
   var ptext=document.getElementById("progress-text");
-  var sWritten=0,sSkipped=0,sNoJson=0,sErr=0,sTotal=imageFiles.length;
+  var sWritten=0,sSkipped=0,sNoJson=0,sErr=0,sOrg=0,sTotal=imageFiles.length;
+  if(opts.organise){document.getElementById("s-org-wrap").style.display="block";}else{document.getElementById("s-org-wrap").style.display="none";}
   document.getElementById("s-total").textContent=sTotal;
   log("[SnapMbed] Starting — "+sTotal+" images to scan","log-info");
   /* For in-place write we need File System Access API */
@@ -902,7 +1075,9 @@ document.getElementById("btn-run").addEventListener("click",async function(){
     if(result.status==="ok"){
       sWritten++;
       document.getElementById("s-written").textContent=sWritten;
-      log("  [✓ written] "+imgPath,"log-ok");
+      var logLabel=imgPath;
+      if(opts.organise&&result.meta_ts){sOrg++;document.getElementById("s-org").textContent=sOrg;logLabel+=" → "+organisedPath(result.meta_ts,imgPath,opts.orgStructure);}
+      log("  [✓ written] "+logLabel,"log-ok");
       if(useInPlace&&dirHandle){
         try{
           var parts=imgPath.split("/");
@@ -914,7 +1089,11 @@ document.getElementById("btn-run").addEventListener("click",async function(){
           await writable.close();
         }catch(e){log("  [warn] Could not write in-place: "+e,"log-skip");}
       }
-      if(opts.zip)zipFiles.push({name:imgPath,data:result.data});
+      var zipName=imgPath;
+      if(opts.organise&&result.meta_ts){
+        zipName=organisedPath(result.meta_ts,imgPath,opts.orgStructure);
+      }
+      if(opts.zip)zipFiles.push({name:zipName,data:result.data});
     }else if(result.status==="skip"){
       sSkipped++;
       document.getElementById("s-skipped").textContent=sSkipped;
@@ -930,10 +1109,14 @@ document.getElementById("btn-run").addEventListener("click",async function(){
   fill.style.width="100%";
   ptext.textContent="Done!";
   log("","");
-  log("[SnapMbed] Finished. Written: "+sWritten+"  Skipped: "+sSkipped+"  No JSON: "+sNoJson+"  Errors: "+sErr,"log-info");
+  var finalMsg="[SnapMbed] Finished. Written: "+sWritten+"  Skipped: "+sSkipped+"  No JSON: "+sNoJson+"  Errors: "+sErr;
+  if(opts.organise)finalMsg+="  Organised: "+sOrg;
+  log(finalMsg,"log-info");
   var banner=document.getElementById("done-banner");
   banner.style.display="block";
-  banner.innerHTML="✅  Done! &nbsp; <strong>"+sWritten+"</strong> images updated &nbsp;•&nbsp; <strong>"+sSkipped+"</strong> skipped (already had metadata) &nbsp;•&nbsp; <strong>"+sNoJson+"</strong> had no JSON &nbsp;•&nbsp; <strong>"+sErr+"</strong> errors";
+  var bannerMsg="✅  Done! &nbsp; <strong>"+sWritten+"</strong> images updated &nbsp;•&nbsp; <strong>"+sSkipped+"</strong> skipped &nbsp;•&nbsp; <strong>"+sNoJson+"</strong> no JSON &nbsp;•&nbsp; <strong>"+sErr+"</strong> errors";
+  if(opts.organise)bannerMsg+=" &nbsp;•&nbsp; <strong>"+sOrg+"</strong> organised into folders";
+  banner.innerHTML=bannerMsg;
   if(opts.zip&&zipFiles.length>0){
     log("[SnapMbed] Building ZIP…","log-info");
     setTimeout(()=>{
