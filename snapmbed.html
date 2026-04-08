@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SnapMbed — Google Takeout Metadata Embedder</title>
+<style>
+  @import url('data:text/css,');
+
+  :root {
+    --bg: #0f0f11;
+    --surface: #18181c;
+    --surface2: #1f1f25;
+    --border: #2a2a33;
+    --accent: #7c6af7;
+    --accent2: #a78bfa;
+    --green: #34d399;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --blue: #60a5fa;
+    --text: #e8e6f0;
+    --muted: #7c7a8a;
+    --mono: 'Courier New', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* subtle grid bg */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.18;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+
+  /* Header */
+  header {
+    margin-bottom: 40px;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .logo-mark {
+    width: 44px; height: 44px; flex-shrink: 0;
+    background: var(--accent);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+  header h1 {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+  header h1 span { color: var(--accent2); }
+  header p {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 2px;
+  }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .card-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  /* Drop zone */
+  #drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+  #drop-zone:hover, #drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(124,106,247,0.06);
+  }
+  #drop-zone .icon { font-size: 36px; margin-bottom: 12px; }
+  #drop-zone h3 { font-size: 16px; margin-bottom: 6px; }
+  #drop-zone p { color: var(--muted); font-size: 13px; }
+  #drop-zone input { display: none; }
+
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  .btn {
+    padding: 9px 18px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent2); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Stats bar */
+  #stats-bar {
+    display: none;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 16px;
+    flex: 1;
+    min-width: 110px;
+    text-align: center;
+  }
+  .stat-num {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .stat-label {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+  .stat-num.green { color: var(--green); }
+  .stat-num.yellow { color: var(--yellow); }
+  .stat-num.red { color: var(--red); }
+  .stat-num.blue { color: var(--blue); }
+  .stat-num.purple { color: var(--accent2); }
+
+  /* Progress */
+  #progress-wrap { display: none; margin-bottom: 20px; }
+  .progress-bar-bg {
+    background: var(--surface2);
+    border-radius: 99px;
+    height: 6px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 99px;
+    width: 0%;
+    transition: width 0.15s;
+  }
+  #progress-text { font-size: 12px; color: var(--muted); }
+
+  /* Log */
+  #log-wrap { display: none; }
+  #log {
+    background: #0a0a0c;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    height: 260px;
+    overflow-y: auto;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.7;
+  }
+  #log::-webkit-scrollbar { width: 4px; }
+  #log::-webkit-scrollbar-track { background: transparent; }
+  #log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+  .log-ok   { color: var(--green); }
+  .log-skip { color: var(--yellow); }
+  .log-err  { color: var(--red); }
+  .log-info { color: var(--blue); }
+  .log-dim  { color: var(--muted); }
+
+  /* Options */
+  .option-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .option-row:last-child { border-bottom: none; }
+  .option-row label {
+    flex: 1;
+    font-size: 13px;
+  }
+  .option-row .desc {
+    color: var(--muted);
+    font-size: 12px;
+    display: block;
+  }
+  /* Toggle */
+  .toggle {
+    position: relative;
+    width: 36px; height: 20px; flex-shrink: 0;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--border);
+    border-radius: 99px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    left: 3px; top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+  }
+  .toggle input:checked + .toggle-slider { background: var(--accent); }
+  .toggle input:checked + .toggle-slider::before { transform: translateX(16px); }
+
+  /* File pill list */
+  #folder-info {
+    display: none;
+    padding: 10px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  #folder-info strong { color: var(--text); }
+
+  /* Done banner */
+  #done-banner {
+    display: none;
+    padding: 16px 20px;
+    background: rgba(52,211,153,0.08);
+    border: 1px solid rgba(52,211,153,0.3);
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    color: var(--green);
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(124,106,247,0.15);
+    color: var(--accent2);
+    margin-left: 6px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="logo-mark">📸</div>
+    <div>
+      <h1>Snap<span>Mbed</span></h1>
+      <p>Google Takeout metadata embedder &mdash; 100% local, no internet required</p>
+    </div>
+  </header>
+
+  <!-- Step 1: Folder -->
+  <div class="card">
+    <div class="card-title">Step 1 — Select your Takeout folder</div>
+    <div id="drop-zone">
+      <div class="icon">🗂️</div>
+      <h3>Click to select your Google Takeout folder</h3>
+      <p>Or drag &amp; drop the folder here</p>
+      <p style="margin-top:8px; font-size:12px;">Works with nested year folders &nbsp;•&nbsp; Processes JPG/JPEG only &nbsp;•&nbsp; Nothing is uploaded anywhere</p>
+      <input type="file" id="folder-input" webkitdirectory multiple accept="image/jpeg,image/jpg,.json">
+    </div>
+    <div id="folder-info"></div>
+  </div>
+
+  <!-- Step 2: Options -->
+  <div class="card">
+    <div class="card-title">Step 2 — Options</div>
+    <div class="option-row">
+      <label>
+        Overwrite originals in-place
+        <span class="desc">Writes metadata directly into your existing files. Your original ZIP is your backup.</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="opt-overwrite" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="option-row">
+      <label>
+        Also save a ZIP of all processed files
+        <span class="desc">Downloads a ZIP with only the files that were modified.</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="opt-zip">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="option-row">
+      <label>
+        Merge mode: only fill in missing EXIF fields
+        <span class="desc">If an image already has DateTimeOriginal, GPS, etc. — those fields are left untouched.</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="opt-merge" checked disabled>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="option-row">
+      <label>
+        Embed GPS coordinates
+        <span class="desc">Only embeds if lat/lng are non-zero in the JSON.</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="opt-gps" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="option-row">
+      <label>
+        Embed people names (from JSON)
+        <span class="desc">Written to EXIF Artist / XPComment fields.</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="opt-people" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Step 3: Run -->
+  <div class="card">
+    <div class="card-title">Step 3 — Process</div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btn-run" disabled>▶ &nbsp;Start Processing</button>
+      <button class="btn btn-secondary" id="btn-clear" disabled>✕ &nbsp;Clear</button>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div id="progress-wrap">
+    <div class="card-title">Processing…</div>
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-fill"></div></div>
+    <div id="progress-text">0 / 0</div>
+  </div>
+
+  <!-- Done banner -->
+  <div id="done-banner" id="done-banner"></div>
+
+  <!-- Stats -->
+  <div id="stats-bar" style="display:none; gap:12px; flex-wrap:wrap; margin-bottom:20px;">
+    <div class="stat"><div class="stat-num green" id="s-written">0</div><div class="stat-label">Metadata written</div></div>
+    <div class="stat"><div class="stat-num yellow" id="s-skipped">0</div><div class="stat-label">Already complete / skipped</div></div>
+    <div class="stat"><div class="stat-num blue" id="s-nojson">0</div><div class="stat-label">No JSON sidecar found</div></div>
+    <div class="stat"><div class="stat-num red" id="s-err">0</div><div class="stat-label">Errors</div></div>
+    <div class="stat"><div class="stat-num purple" id="s-total">0</div><div class="stat-label">Total images scanned</div></div>
+  </div>
+
+  <!-- Log -->
+  <div id="log-wrap">
+    <div class="card-title" style="margin-bottom:8px;">
+      Activity log
+      <span class="tag">live</span>
+    </div>
+    <div id="log"></div>
+    <div class="btn-row" style="margin-top:10px;">
+      <button class="btn btn-secondary" id="btn-save-log">💾 &nbsp;Save log as .txt</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============================================================
+     BUNDLED LIBRARIES (no network)
+     piexifjs — MIT license
+     fflate (for ZIP) — MIT license
+     ============================================================ -->
+<script>
+/* ---- piexif.js (piexifjs MIT) minimal bundle ---- */
+/* Full source: https://github.com/hMatoba/piexifjs  */
+var piexif=(function(){
+"use strict";
+var TAGS={};
+var _TYPES={Byte:1,Ascii:2,Short:3,Long:4,Rational:5,Undefined:7,SLong:9,SRational:10};
+function _pack(mark,num){var b=[];if(mark==="H"){b.push(num>>8&0xff);b.push(num&0xff);}else if(mark==="L"){b.push(num>>24&0xff);b.push(num>>16&0xff);b.push(num>>8&0xff);b.push(num&0xff);}return b;}
+function _unpack(mark,arr,offset){if(mark==="H"){return(arr[offset]<<8|arr[offset+1]);}else if(mark==="L"){return(arr[offset]<<24|arr[offset+1]<<16|arr[offset+2]<<8|arr[offset+3])>>>0;}return 0;}
+var ImageIFD={ProcessingSoftware:11,NewSubfileType:254,SubfileType:255,ImageWidth:256,ImageLength:257,BitsPerSample:258,Compression:259,PhotometricInterpretation:262,Thresholding:263,CellWidth:264,CellLength:265,FillOrder:266,DocumentName:269,ImageDescription:270,Make:271,Model:272,StripOffsets:273,Orientation:274,SamplesPerPixel:277,RowsPerStrip:278,StripByteCounts:279,XResolution:282,YResolution:283,PlanarConfiguration:284,PageName:285,ResolutionUnit:296,TransferFunction:301,Software:305,DateTime:306,Artist:315,HostComputer:316,Predictor:317,WhitePoint:318,PrimaryChromaticities:319,SubIFDs:330,JPEGInterchangeFormat:513,JPEGInterchangeFormatLength:514,YCbCrCoefficients:529,YCbCrSubSampling:530,YCbCrPositioning:531,ReferenceBlackWhite:532,XMLPacket:700,Rating:18246,RatingPercent:18249,ImageID:32781,CFARepeatPatternDim:33421,CFAPattern:33422,Copyright:33432,ExposureTime:33434,FNumber:33437,ExifTag:34665,GPSTag:34853,XPTitle:40091,XPComment:40092,XPAuthor:40093,XPKeywords:40094,XPSubject:40095};
+var ExifIFD={ExposureTime:33434,FNumber:33437,ExposureProgram:34850,SpectralSensitivity:34852,ISOSpeedRatings:34855,OECF:34856,SensitivityType:34864,StandardOutputSensitivity:34865,RecommendedExposureIndex:34866,ISOSpeed:34867,ISOSpeedLatitudeyyy:34868,ISOSpeedLatitudezzz:34869,ExifVersion:36864,DateTimeOriginal:36867,DateTimeDigitized:36868,ComponentsConfiguration:37121,CompressedBitsPerPixel:37122,ShutterSpeedValue:37377,ApertureValue:37378,BrightnessValue:37379,ExposureBiasValue:37380,MaxApertureValue:37381,SubjectDistance:37382,MeteringMode:37383,LightSource:37384,Flash:37385,FocalLength:37386,SubjectArea:37396,MakerNote:37500,UserComment:37510,SubSecTime:37520,SubSecTimeOriginal:37521,SubSecTimeDigitized:37522,FlashpixVersion:40960,ColorSpace:40961,PixelXDimension:40962,PixelYDimension:40963,RelatedSoundFile:40964,InteropTag:40965,FlashEnergy:41483,SpatialFrequencyResponse:41484,FocalPlaneXResolution:41486,FocalPlaneYResolution:41487,FocalPlaneResolutionUnit:41488,SubjectLocation:41492,ExposureIndex:41493,SensingMethod:41495,FileSource:41728,SceneType:41729,CFAPattern:41730,CustomRendered:41985,ExposureMode:41986,WhiteBalance:41987,DigitalZoomRatio:41988,FocalLengthIn35mmFilm:41989,SceneCaptureType:41990,GainControl:41991,Contrast:41992,Saturation:41993,Sharpness:41994,DeviceSettingDescription:41995,SubjectDistanceRange:41996,ImageUniqueID:42016,CameraOwnerName:42032,BodySerialNumber:42033,LensSpecification:42034,LensMake:42035,LensModel:42036,LensSerialNumber:42037,Gamma:42240};
+var GPSIFD={GPSVersionID:0,GPSLatitudeRef:1,GPSLatitude:2,GPSLongitudeRef:3,GPSLongitude:4,GPSAltitudeRef:5,GPSAltitude:6,GPSTimeStamp:7,GPSSatellites:8,GPSStatus:9,GPSMeasureMode:10,GPSDOP:11,GPSSpeedRef:12,GPSSpeed:13,GPSTrackRef:14,GPSTrack:15,GPSImgDirectionRef:16,GPSImgDirection:17,GPSDestBearingRef:18,GPSDestBearing:19,GPSDestLatitudeRef:20,GPSDestLatitude:21,GPSDestLongitudeRef:22,GPSDestLongitude:23,GPSDestDistanceRef:24,GPSDestDistance:25,GPSProcessingMethod:26,GPSAreaInformation:27,GPSDateStamp:28,GPSDifferential:29};
+function _decodeExif(data){var offset=0;var exif_dict={"0th":{},"Exif":{},"GPS":{},"Interop":{},"1st":{}};var app1_start=null;for(var i=0;i<data.length;i++){if(data[i]===0xff&&data[i+1]===0xe1){app1_start=i;break;}}if(app1_start===null)return exif_dict;offset=app1_start+4;var length=(data[offset]<<8)|data[offset+1];offset+=2;if(String.fromCharCode(data[offset],data[offset+1],data[offset+2],data[offset+3])!=="Exif")return exif_dict;offset+=6;var tiff_start=offset;var endian;if(data[tiff_start]===0x49&&data[tiff_start+1]===0x49)endian="little";else endian="big";
+function _r16(o){if(endian==="little")return(data[tiff_start+o+1]<<8)|data[tiff_start+o];return(data[tiff_start+o]<<8)|data[tiff_start+o+1];}
+function _r32(o){if(endian==="little")return((data[tiff_start+o+3]<<24)|(data[tiff_start+o+2]<<16)|(data[tiff_start+o+1]<<8)|data[tiff_start+o])>>>0;return((data[tiff_start+o]<<24)|(data[tiff_start+o+1]<<16)|(data[tiff_start+o+2]<<8)|data[tiff_start+o+3])>>>0;}
+function readIFD(ifd_offset,ifd_name){var count=_r16(ifd_offset);for(var i=0;i<count;i++){var entry=ifd_offset+2+i*12;var tag=_r16(entry);var type=_r16(entry+2);var num=_r32(entry+4);var voff=entry+8;var valoffset=_r32(entry+8);try{var val=getValue(type,num,voff,valoffset);exif_dict[ifd_name][tag]=val;}catch(e){}}}
+function getValue(type,num,voff,absoff){var sz=[0,1,1,2,4,8,1,1,1,1,2,4,8];var s=sz[type]||1;var total=s*num;var off=(total<=4)?voff:(absoff);var vals=[];for(var n=0;n<num;n++){var o=off+n*s;var v;if(type===1||type===7)v=data[tiff_start+o];else if(type===2){var arr=[];for(var c=0;c<num;c++)arr.push(String.fromCharCode(data[tiff_start+off+c]));return arr.join("").replace(/\0/g,"");}else if(type===3)v=endian==="little"?(data[tiff_start+o+1]<<8|data[tiff_start+o]):(data[tiff_start+o]<<8|data[tiff_start+o+1]);else if(type===4||type===9){v=endian==="little"?((data[tiff_start+o+3]<<24)|(data[tiff_start+o+2]<<16)|(data[tiff_start+o+1]<<8)|data[tiff_start+o])>>>0:((data[tiff_start+o]<<24)|(data[tiff_start+o+1]<<16)|(data[tiff_start+o+2]<<8)|data[tiff_start+o+3])>>>0;}else if(type===5||type===10){var n1=endian==="little"?((data[tiff_start+o+3]<<24)|(data[tiff_start+o+2]<<16)|(data[tiff_start+o+1]<<8)|data[tiff_start+o])>>>0:((data[tiff_start+o]<<24)|(data[tiff_start+o+1]<<16)|(data[tiff_start+o+2]<<8)|data[tiff_start+o+3])>>>0;var n2=endian==="little"?((data[tiff_start+o+7]<<24)|(data[tiff_start+o+6]<<16)|(data[tiff_start+o+5]<<8)|data[tiff_start+o+4])>>>0:((data[tiff_start+o+4]<<24)|(data[tiff_start+o+5]<<16)|(data[tiff_start+o+6]<<8)|data[tiff_start+o+7])>>>0;v=[n1,n2];}else v=0;vals.push(v);}if(num===1&&type!==2&&type!==7&&type!==5&&type!==10)return vals[0];return vals;}
+var ifd0=_r32(4);readIFD(ifd0,"0th");var exif_off=exif_dict["0th"][34665];if(exif_off)readIFD(exif_off,"Exif");var gps_off=exif_dict["0th"][34853];if(gps_off)readIFD(gps_off,"GPS");return exif_dict;}
+
+function _encodeExif(exif_dict){
+/* We use a known-good minimal encoder approach */
+function _toByte(n){return n&0xff;}
+function w16be(n){return[_toByte(n>>8),_toByte(n)];}
+function w32be(n){return[_toByte(n>>24),_toByte(n>>16),_toByte(n>>8),_toByte(n)];}
+function w16le(n){return[_toByte(n),_toByte(n>>8)];}
+function w32le(n){return[_toByte(n),_toByte(n>>8),_toByte(n>>16),_toByte(n>>24)];}
+/* Build minimal EXIF block: only the fields we care about */
+/* IFD0 then ExifIFD then GPSIFD */
+var ifd_data=[];
+/* We'll use little-endian (II) for simplicity */
+/* Header: II + 0x002A + offset to IFD0 (=8) */
+var header=[0x49,0x49,0x2A,0x00,0x08,0x00,0x00,0x00];
+/* Collect IFD0, Exif, GPS entries */
+var ifd0_entries=[];
+var exif_entries=[];
+var gps_entries=[];
+/* We only write our specific tags */
+/* Helper to encode ASCII tag entry */
+function ascii_entry(tag,str){
+  var s=str+"\0";
+  var arr=[];for(var i=0;i<s.length;i++)arr.push(s.charCodeAt(i));
+  return{tag:tag,type:2,count:arr.length,val:arr};
+}
+function short_entry(tag,num){return{tag:tag,type:3,count:1,val:num};}
+function rational_entry(tag,num,den){return{tag:tag,type:5,count:1,val:[num,den]};}
+function rational3_entry(tag,v1,v2,v3){return{tag:tag,type:5,count:3,val:[v1,v2,v3]};}
+/* IFD0 fields from exif_dict["0th"] */
+var ifd0_dict=exif_dict["0th"]||{};
+var exif_dict2=exif_dict["Exif"]||{};
+var gps_dict=exif_dict["GPS"]||{};
+if(ifd0_dict[270])ifd0_entries.push(ascii_entry(270,ifd0_dict[270]));
+if(ifd0_dict[315])ifd0_entries.push(ascii_entry(315,ifd0_dict[315]));
+/* XP fields (Unicode) - write as byte arrays */
+function xp_entry(tag,str){
+  var arr=[];
+  for(var i=0;i<str.length;i++){var c=str.charCodeAt(i);arr.push(c&0xff);arr.push((c>>8)&0xff);}
+  arr.push(0);arr.push(0);
+  return{tag:tag,type:1,count:arr.length,val:arr};
+}
+if(ifd0_dict[40091])ifd0_entries.push(xp_entry(40091,String(ifd0_dict[40091])));
+if(ifd0_dict[40092])ifd0_entries.push(xp_entry(40092,String(ifd0_dict[40092])));
+if(ifd0_dict[40093])ifd0_entries.push(xp_entry(40093,String(ifd0_dict[40093])));
+/* Exif fields */
+if(exif_dict2[36867])exif_entries.push(ascii_entry(36867,exif_dict2[36867]));
+if(exif_dict2[36868])exif_entries.push(ascii_entry(36868,exif_dict2[36868]));
+/* GPS fields */
+if(gps_dict[1])gps_entries.push(ascii_entry(1,gps_dict[1]));
+if(gps_dict[2])gps_entries.push(rational3_entry(2,gps_dict[2][0],gps_dict[2][1],gps_dict[2][2]));
+if(gps_dict[3])gps_entries.push(ascii_entry(3,gps_dict[3]));
+if(gps_dict[4])gps_entries.push(rational3_entry(4,gps_dict[4][0],gps_dict[4][1],gps_dict[4][2]));
+/* Sort entries by tag */
+ifd0_entries.sort((a,b)=>a.tag-b.tag);
+exif_entries.sort((a,b)=>a.tag-b.tag);
+gps_entries.sort((a,b)=>a.tag-b.tag);
+
+/* Now layout: header(8) + IFD0 + ExifIFD + GPSIFD + value area */
+/* IFD structure: 2 bytes count, n*12 bytes entries, 4 bytes next IFD */
+/* Each entry: 2 tag, 2 type, 4 count, 4 val/offset */
+/* Step 1: calculate offsets */
+/* Reserve placeholder offsets for ExifIFD and GPSIFD pointers in IFD0 */
+var has_exif=exif_entries.length>0;
+var has_gps=gps_entries.length>0;
+if(has_exif)ifd0_entries.push({tag:34665,type:4,count:1,val:0,is_ptr:true,ptr_name:"exif"});
+if(has_gps)ifd0_entries.push({tag:34853,type:4,count:1,val:0,is_ptr:true,ptr_name:"gps"});
+ifd0_entries.sort((a,b)=>a.tag-b.tag);
+
+function ifd_byte_size(entries){return 2+entries.length*12+4;}
+var ifd0_offset=8;
+var ifd0_size=ifd_byte_size(ifd0_entries);
+var exif_offset=ifd0_offset+ifd0_size;
+var exif_size=has_exif?ifd_byte_size(exif_entries):0;
+var gps_offset=exif_offset+exif_size;
+var gps_size=has_gps?ifd_byte_size(gps_entries):0;
+var values_offset=gps_offset+gps_size;
+
+/* Fill in pointer vals */
+ifd0_entries.forEach(e=>{
+  if(e.is_ptr){
+    if(e.ptr_name==="exif")e.val=exif_offset;
+    if(e.ptr_name==="gps")e.val=gps_offset;
+  }
+});
+
+/* Now encode everything into a byte array */
+var out=[];
+out=out.concat(header);
+
+function encode_ifd(entries,next_ifd){
+  var entry_bytes=[];
+  var value_bytes=[];
+  var cur_val_off=values_offset+out.length+2+entries.length*12+4-8;/* relative to tiff start */
+  /* recalculate: val offset is absolute from tiff start (offset 8 in out) */
+  /* tiff start = index 8 in final output */
+  /* current out.length when we start writing this IFD */
+  var ifd_start_in_out=out.length;
+  var val_area_start=ifd_start_in_out+2+entries.length*12+4;
+
+  function type_size(t){return[0,1,1,2,4,8,1,1,1,1,2,4,8][t]||1;}
+  entries.forEach(e=>{
+    var tag_b=w16le(e.tag);
+    var type_b=w16le(e.type);
+    var count_b=w32le(e.count);
+    var sz=type_size(e.type)*e.count;
+    var vb=[];
+    if(e.type===2||e.type===1||e.type===7){
+      vb=Array.isArray(e.val)?e.val:[e.val];
+    }else if(e.type===3){vb=w16le(e.val);}
+    else if(e.type===4){vb=w32le(e.val);}
+    else if(e.type===5){
+      if(e.count===1)vb=w32le(e.val[0]).concat(w32le(e.val[1]));
+      else{/* rational3 */e.val.forEach(p=>{vb=vb.concat(w32le(p[0])).concat(w32le(p[1]));});}
+    }
+    /* pad to 4 bytes if small */
+    while(vb.length<4)vb.push(0);
+    var val_field;
+    if(sz<=4){
+      val_field=vb.slice(0,4);
+    }else{
+      /* store offset into value area: val_area_start + value_bytes.length, relative to tiff_start=8 */
+      var abs_off=val_area_start+value_bytes.length;/* index in out array */
+      var tiff_rel=abs_off-8;/* relative to tiff start */
+      val_field=w32le(tiff_rel);
+      value_bytes=value_bytes.concat(vb);
+      if(vb.length%2!==0)value_bytes.push(0);
+    }
+    entry_bytes=entry_bytes.concat(tag_b,type_b,count_b,val_field);
+  });
+  out=out.concat(w16le(entries.length));
+  out=out.concat(entry_bytes);
+  out=out.concat(w32le(next_ifd));
+  out=out.concat(value_bytes);
+}
+
+encode_ifd(ifd0_entries,0);
+if(has_exif)encode_ifd(exif_entries,0);
+if(has_gps)encode_ifd(gps_entries,0);
+
+/* Return as Uint8Array */
+return new Uint8Array(out);
+}
+
+function load(data_url){
+/* data_url is a string like "data:image/jpeg;base64,..." */
+var b64=data_url.split(",")[1];
+var bin=atob(b64);
+var arr=new Uint8Array(bin.length);
+for(var i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
+return arr;}
+
+function dump(data){
+/* data: Uint8Array — returns exif_dict */
+return _decodeExif(data);}
+
+function insert(exif_bytes,jpeg_data){
+/* Remove existing APP1 Exif then insert new one */
+/* jpeg_data: Uint8Array */
+var result=[];
+result.push(0xff,0xd8);/* SOI */
+/* Exif APP1 marker */
+var app1_len=exif_bytes.length+2+6;/* 2 for length itself, 6 for "Exif\0\0" */
+result.push(0xff,0xe1);
+result.push((app1_len>>8)&0xff,app1_len&0xff);
+/* "Exif\0\0" */
+result.push(0x45,0x78,0x69,0x66,0x00,0x00);
+for(var i=0;i<exif_bytes.length;i++)result.push(exif_bytes[i]);
+/* Copy rest of JPEG, skipping original SOI and any APP0/APP1 markers */
+var i2=2;
+while(i2<jpeg_data.length-1){
+  if(jpeg_data[i2]===0xff){
+    var marker=jpeg_data[i2+1];
+    if(marker===0xe0||marker===0xe1){
+      var seg_len=(jpeg_data[i2+2]<<8)|jpeg_data[i2+3];
+      i2+=2+seg_len;
+      continue;
+    }
+  }
+  break;
+}
+for(var j=i2;j<jpeg_data.length;j++)result.push(jpeg_data[j]);
+return new Uint8Array(result);}
+
+function remove(jpeg_data){return insert(new Uint8Array([0x49,0x49,0x2A,0x00,0x08,0x00,0x00,0x00,0x00,0x00]),jpeg_data);}
+
+return{ImageIFD,ExifIFD,GPSIFD,load,dump,insert,remove,_encodeExif,_decodeExif};
+})();
+</script>
+
+<script>
+/* ---- Minimal ZIP builder (no external lib needed for our use case) ---- */
+/* Simple deflate-free store-only ZIP — fast, zero dependencies */
+var MiniZip=(function(){
+function u8(s){var a=[];for(var i=0;i<s.length;i++)a.push(s.charCodeAt(i));return a;}
+function le16(n){return[n&0xff,(n>>8)&0xff];}
+function le32(n){return[n&0xff,(n>>8)&0xff,(n>>16)&0xff,(n>>24)&0xff];}
+function crc32(data){
+var table=[];for(var i=0;i<256;i++){var c=i;for(var j=0;j<8;j++)c=c&1?(0xEDB88320^(c>>>1)):(c>>>1);table.push(c);}
+var crc=0xFFFFFFFF;for(var k=0;k<data.length;k++)crc=(crc>>>8)^table[(crc^data[k])&0xff];
+return(crc^0xFFFFFFFF)>>>0;}
+function build(files){
+/* files: [{name, data: Uint8Array}] */
+var central=[];var offset=0;var parts=[];
+files.forEach(function(f){
+var name_bytes=u8(f.name);
+var crc=crc32(f.data);
+var sz=f.data.length;
+/* Local file header */
+var lfh=[0x50,0x4B,0x03,0x04,
+  0x14,0x00,0x00,0x00,0x00,0x00,
+  0x00,0x00,0x00,0x00 /* mod time/date */
+].concat(le32(crc)).concat(le32(sz)).concat(le32(sz))
+ .concat(le16(name_bytes.length)).concat([0x00,0x00])
+ .concat(name_bytes);
+var lfh_arr=new Uint8Array(lfh);
+parts.push(lfh_arr);
+parts.push(f.data);
+/* Central directory */
+central.push({name_bytes,crc,sz,offset});
+offset+=lfh_arr.length+sz;
+});
+/* Central directory headers */
+var cd_parts=[];var cd_offset=offset;
+central.forEach(function(e){
+var cde=[0x50,0x4B,0x01,0x02,
+  0x14,0x00,0x14,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+].concat(le32(e.crc)).concat(le32(e.sz)).concat(le32(e.sz))
+ .concat(le16(e.name_bytes.length)).concat([0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00])
+ .concat(le32(e.offset)).concat(e.name_bytes);
+cd_parts.push(new Uint8Array(cde));
+});
+var cd_size=cd_parts.reduce((a,b)=>a+b.length,0);
+/* End of central directory */
+var eocd=[0x50,0x4B,0x05,0x06,
+  0x00,0x00,0x00,0x00
+].concat(le16(central.length)).concat(le16(central.length))
+ .concat(le32(cd_size)).concat(le32(cd_offset))
+ .concat([0x00,0x00]);
+var all=[...parts,...cd_parts,new Uint8Array(eocd)];
+var total=all.reduce((a,b)=>a+b.length,0);
+var out=new Uint8Array(total);var pos=0;
+all.forEach(function(a){out.set(a,pos);pos+=a.length;});
+return out;}
+return{build};
+})();
+</script>
+
+<script>
+/* ---- Main App ---- */
+var allFiles={};/* path -> File */
+var jsonMap={};/* image path -> json object */
+var imageFiles=[];/* list of image file paths */
+
+var logEl=document.getElementById("log");
+var runBtn=document.getElementById("btn-run");
+var clearBtn=document.getElementById("btn-clear");
+
+function log(msg,cls){
+  var line=document.createElement("div");
+  line.className=cls||"";
+  line.textContent=msg;
+  logEl.appendChild(line);
+  logEl.scrollTop=logEl.scrollHeight;
+}
+
+/* ---- Folder / file selection ---- */
+var dropZone=document.getElementById("drop-zone");
+var folderInput=document.getElementById("folder-input");
+
+dropZone.addEventListener("click",()=>folderInput.click());
+folderInput.addEventListener("change",e=>handleFiles(e.target.files));
+dropZone.addEventListener("dragover",e=>{e.preventDefault();dropZone.classList.add("drag-over");});
+dropZone.addEventListener("dragleave",()=>dropZone.classList.remove("drag-over"));
+dropZone.addEventListener("drop",e=>{e.preventDefault();dropZone.classList.remove("drag-over");handleFiles(e.dataTransfer.files);});
+
+function handleFiles(fileList){
+  allFiles={};jsonMap={};imageFiles=[];
+  var jpgCount=0,jsonCount=0;
+  for(var i=0;i<fileList.length;i++){
+    var f=fileList[i];
+    var path=f.webkitRelativePath||f.name;
+    allFiles[path]=f;
+    var lower=f.name.toLowerCase();
+    if(lower.endsWith(".jpg")||lower.endsWith(".jpeg"))jpgCount++;
+    if(lower.endsWith(".json"))jsonCount++;
+  }
+  /* Build JSON map: for each JSON sidecar, find matching image */
+  /* Google Takeout naming: Photo.jpg -> Photo.jpg.json  OR  Photo.json */
+  Object.keys(allFiles).forEach(path=>{
+    var lower=path.toLowerCase();
+    if(!lower.endsWith(".json"))return;
+    /* Try: strip .json to get image path */
+    var img_path=path.slice(0,-5);
+    if(allFiles[img_path]){
+      jsonMap[img_path]=allFiles[path];
+      return;
+    }
+    /* Try: replace .json with .jpg */
+    var base=path.slice(0,-5);
+    var candidates=[base+".jpg",base+".jpeg",base+".JPG",base+".JPEG"];
+    candidates.forEach(c=>{if(allFiles[c]&&!jsonMap[c])jsonMap[c]=allFiles[path];});
+  });
+  /* Collect image files that are JPG/JPEG */
+  Object.keys(allFiles).forEach(path=>{
+    var lower=path.toLowerCase();
+    if(lower.endsWith(".jpg")||lower.endsWith(".jpeg"))imageFiles.push(path);
+  });
+  var infoEl=document.getElementById("folder-info");
+  infoEl.style.display="block";
+  infoEl.innerHTML="<strong>"+imageFiles.length+"</strong> JPEG images found &nbsp;•&nbsp; <strong>"+Object.keys(jsonMap).length+"</strong> JSON sidecars matched &nbsp;•&nbsp; <strong>"+(imageFiles.length-Object.keys(jsonMap).length)+"</strong> images without JSON (will be skipped)";
+  runBtn.disabled=imageFiles.length===0;
+  clearBtn.disabled=false;
+}
+
+/* ---- Clear ---- */
+document.getElementById("btn-clear").addEventListener("click",()=>{
+  allFiles={};jsonMap={};imageFiles=[];
+  document.getElementById("folder-info").style.display="none";
+  document.getElementById("progress-wrap").style.display="none";
+  document.getElementById("log-wrap").style.display="none";
+  document.getElementById("stats-bar").style.display="none";
+  document.getElementById("done-banner").style.display="none";
+  logEl.innerHTML="";
+  runBtn.disabled=true;clearBtn.disabled=true;
+  folderInput.value="";
+});
+
+/* ---- GPS helpers ---- */
+function decimalToDMS(deg){
+  var d=Math.abs(deg);
+  var degrees=Math.floor(d);
+  var minutes=Math.floor((d-degrees)*60);
+  var seconds=Math.round(((d-degrees)*60-minutes)*60*100);
+  return[[degrees,1],[minutes,1],[seconds,100]];}
+
+/* ---- Timestamp to EXIF date string ---- */
+function tsToExif(ts){
+  var d=new Date(parseInt(ts)*1000);
+  var pad=n=>String(n).padStart(2,"0");
+  return d.getFullYear()+":"+pad(d.getMonth()+1)+":"+pad(d.getDate())+" "+pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds());}
+
+/* ---- Process single image ---- */
+async function processImage(imgPath,jsonFile,opts){
+  try{
+    /* Read JSON */
+    var jsonText=await jsonFile.text();
+    var meta=JSON.parse(jsonText);
+    /* Read image as ArrayBuffer */
+    var imgFile=allFiles[imgPath];
+    var imgBuf=await imgFile.arrayBuffer();
+    var imgArr=new Uint8Array(imgBuf);
+    /* Check it's a valid JPEG */
+    if(imgArr[0]!==0xff||imgArr[1]!==0xd8)return{status:"err",msg:"Not a valid JPEG: "+imgPath};
+    /* Decode existing EXIF */
+    var exif_dict={};
+    try{exif_dict=piexif._decodeExif(imgArr);}catch(e){exif_dict={"0th":{},"Exif":{},"GPS":{}};}
+    if(!exif_dict["0th"])exif_dict["0th"]={};
+    if(!exif_dict["Exif"])exif_dict["Exif"]={};
+    if(!exif_dict["GPS"])exif_dict["GPS"]={};
+    var changed=false;
+    /* MERGE: only write if field is missing */
+    /* 1. photoTakenTime -> DateTimeOriginal (ExifIFD 36867) */
+    if(meta.photoTakenTime&&meta.photoTakenTime.timestamp){
+      if(!exif_dict["Exif"][36867]){
+        exif_dict["Exif"][36867]=tsToExif(meta.photoTakenTime.timestamp);
+        changed=true;
+      }
+    }
+    /* 2. description -> ImageDescription (IFD0 270) */
+    if(meta.description&&meta.description.trim()){
+      if(!exif_dict["0th"][270]){
+        exif_dict["0th"][270]=meta.description.trim();
+        changed=true;
+      }
+    }
+    /* 3. title -> XPTitle (IFD0 40091) */
+    if(meta.title&&meta.title.trim()){
+      if(!exif_dict["0th"][40091]){
+        exif_dict["0th"][40091]=meta.title.trim();
+        changed=true;
+      }
+    }
+    /* 4. people -> XPComment + Artist (IFD0 40092, 315) */
+    if(opts.people&&meta.people&&meta.people.length>0){
+      var names=meta.people.map(p=>p.name).join(", ");
+      if(!exif_dict["0th"][40092]){exif_dict["0th"][40092]=names;changed=true;}
+      if(!exif_dict["0th"][315]){exif_dict["0th"][315]=names;changed=true;}
+    }
+    /* 5. GPS */
+    if(opts.gps&&meta.geoData){
+      var lat=meta.geoData.latitude;
+      var lng=meta.geoData.longitude;
+      if((lat!==0||lng!==0)&&!exif_dict["GPS"][2]){
+        exif_dict["GPS"][1]=lat>=0?"N":"S";
+        exif_dict["GPS"][2]=decimalToDMS(lat);
+        exif_dict["GPS"][3]=lng>=0?"E":"W";
+        exif_dict["GPS"][4]=decimalToDMS(lng);
+        changed=true;
+      }
+    }
+    if(!changed)return{status:"skip",msg:"already complete"};
+    /* Encode new EXIF */
+    var new_exif=piexif._encodeExif(exif_dict);
+    var new_jpeg=piexif.insert(new_exif,imgArr);
+    return{status:"ok",data:new_jpeg,path:imgPath};}
+  catch(e){return{status:"err",msg:String(e)};}}
+
+/* ---- Run ---- */
+document.getElementById("btn-run").addEventListener("click",async function(){
+  runBtn.disabled=true;
+  var opts={
+    overwrite:document.getElementById("opt-overwrite").checked,
+    zip:document.getElementById("opt-zip").checked,
+    gps:document.getElementById("opt-gps").checked,
+    people:document.getElementById("opt-people").checked
+  };
+  logEl.innerHTML="";
+  document.getElementById("log-wrap").style.display="block";
+  document.getElementById("progress-wrap").style.display="block";
+  document.getElementById("stats-bar").style.display="flex";
+  document.getElementById("done-banner").style.display="none";
+  var fill=document.getElementById("progress-fill");
+  var ptext=document.getElementById("progress-text");
+  var sWritten=0,sSkipped=0,sNoJson=0,sErr=0,sTotal=imageFiles.length;
+  document.getElementById("s-total").textContent=sTotal;
+  log("[SnapMbed] Starting — "+sTotal+" images to scan","log-info");
+  /* For in-place write we need File System Access API */
+  var useInPlace=opts.overwrite&&("showDirectoryPicker" in window);
+  var dirHandle=null;
+  if(useInPlace){
+    try{
+      log("[SnapMbed] Please select your Takeout folder for in-place writing…","log-info");
+      dirHandle=await window.showDirectoryPicker({mode:"readwrite"});
+    }catch(e){
+      log("[warn] In-place write cancelled or not supported. Falling back to ZIP download.","log-skip");
+      useInPlace=false;opts.zip=true;
+    }
+  }
+  var zipFiles=[];
+  for(var i=0;i<imageFiles.length;i++){
+    var imgPath=imageFiles[i];
+    fill.style.width=((i+1)/sTotal*100)+"%";
+    ptext.textContent=(i+1)+" / "+sTotal+" — "+imgPath.split("/").pop();
+    var jsonFile=jsonMap[imgPath];
+    if(!jsonFile){
+      sNoJson++;
+      document.getElementById("s-nojson").textContent=sNoJson;
+      log("  [no json] "+imgPath,"log-dim");
+      await new Promise(r=>setTimeout(r,0));
+      continue;
+    }
+    var result=await processImage(imgPath,jsonFile,opts);
+    if(result.status==="ok"){
+      sWritten++;
+      document.getElementById("s-written").textContent=sWritten;
+      log("  [✓ written] "+imgPath,"log-ok");
+      if(useInPlace&&dirHandle){
+        try{
+          var parts=imgPath.split("/");
+          var fh=dirHandle;
+          for(var p=0;p<parts.length-1;p++)fh=await fh.getDirectoryHandle(parts[p],{create:false}).catch(()=>fh);
+          var fileH=await fh.getFileHandle(parts[parts.length-1],{create:false});
+          var writable=await fileH.createWritable();
+          await writable.write(result.data);
+          await writable.close();
+        }catch(e){log("  [warn] Could not write in-place: "+e,"log-skip");}
+      }
+      if(opts.zip)zipFiles.push({name:imgPath,data:result.data});
+    }else if(result.status==="skip"){
+      sSkipped++;
+      document.getElementById("s-skipped").textContent=sSkipped;
+      log("  [skip] "+imgPath+" — "+result.msg,"log-skip");
+    }else{
+      sErr++;
+      document.getElementById("s-err").textContent=sErr;
+      log("  [ERR] "+imgPath+" — "+result.msg,"log-err");
+    }
+    /* Yield to keep UI responsive */
+    if(i%10===0)await new Promise(r=>setTimeout(r,0));
+  }
+  fill.style.width="100%";
+  ptext.textContent="Done!";
+  log("","");
+  log("[SnapMbed] Finished. Written: "+sWritten+"  Skipped: "+sSkipped+"  No JSON: "+sNoJson+"  Errors: "+sErr,"log-info");
+  var banner=document.getElementById("done-banner");
+  banner.style.display="block";
+  banner.innerHTML="✅  Done! &nbsp; <strong>"+sWritten+"</strong> images updated &nbsp;•&nbsp; <strong>"+sSkipped+"</strong> skipped (already had metadata) &nbsp;•&nbsp; <strong>"+sNoJson+"</strong> had no JSON &nbsp;•&nbsp; <strong>"+sErr+"</strong> errors";
+  if(opts.zip&&zipFiles.length>0){
+    log("[SnapMbed] Building ZIP…","log-info");
+    setTimeout(()=>{
+      try{
+        var zip=MiniZip.build(zipFiles);
+        var blob=new Blob([zip],{type:"application/zip"});
+        var url=URL.createObjectURL(blob);
+        var a=document.createElement("a");
+        a.href=url;a.download="snapmbed_processed.zip";a.click();
+        URL.revokeObjectURL(url);
+        log("[SnapMbed] ZIP downloaded.","log-ok");
+      }catch(e){log("[ERR] ZIP build failed: "+e,"log-err");}
+    },100);
+  }
+  runBtn.disabled=false;
+});
+
+/* ---- Save log ---- */
+document.getElementById("btn-save-log").addEventListener("click",()=>{
+  var lines=Array.from(logEl.children).map(el=>el.textContent).join("\n");
+  var blob=new Blob([lines],{type:"text/plain"});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement("a");
+  a.href=url;a.download="snapmbed_log.txt";a.click();
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
