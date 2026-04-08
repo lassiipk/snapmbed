@@ -383,16 +383,34 @@
     <div id="folder-info"></div>
   </div>
 
+  <!-- Skipped file types warning -->
+  <div id="skip-warn" style="display:none; padding:12px 16px; background:rgba(251,191,36,0.07); border:1px solid rgba(251,191,36,0.25); border-radius:10px; margin-bottom:20px; font-size:13px; color:var(--yellow);">
+    <strong>&#9888;&#65039; Non-JPEG files detected (skipped):</strong> <span id="skip-warn-detail"></span><br>
+    <span style="color:var(--muted);font-size:12px;">These files have JSON sidecars but EXIF embedding only works for JPG/JPEG. Their metadata will not be written. HEIC/PNG/MP4 support is planned.</span>
+  </div>
+
+  <!-- EXIF Preview -->
+  <div id="preview-card" style="display:none;" class="card">
+    <div class="card-title">EXIF Inspector &mdash; verify metadata before &amp; after processing</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+      <input id="preview-input" type="text" placeholder="Paste a relative image path, e.g.  2024/IMG_001.jpg" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;font-family:var(--mono);outline:none;">
+      <button class="btn btn-secondary" id="btn-preview" style="flex-shrink:0;">&#128269; Inspect</button>
+    </div>
+    <div id="preview-result" style="display:none;background:#0a0a0c;border:1px solid var(--border);border-radius:8px;padding:14px;font-family:var(--mono);font-size:12px;line-height:1.9;color:var(--muted);">
+    </div>
+    <p style="font-size:11px;color:var(--muted);margin-top:8px;">Reads the file from your loaded folder and shows its current EXIF data. Run it again after processing to confirm the write succeeded.</p>
+  </div>
+
   <!-- Step 2: Options -->
   <div class="card">
     <div class="card-title">Step 2 — Metadata Options</div>
     <div class="option-row">
       <label>
-        Merge mode: only fill in missing EXIF fields
-        <span class="desc">If an image already has DateTimeOriginal, GPS, etc. — those fields are left untouched.</span>
+        Force overwrite existing EXIF fields
+        <span class="desc">OFF (default) — only fills in missing fields, leaves existing data untouched.<br>ON — overwrites all fields from JSON, even if the image already has dates/GPS. Use this if your camera clock was wrong or metadata is bad.</span>
       </label>
       <label class="toggle">
-        <input type="checkbox" id="opt-merge" checked disabled>
+        <input type="checkbox" id="opt-force">
         <span class="toggle-slider"></span>
       </label>
     </div>
@@ -885,8 +903,36 @@ function handleFiles(fileList){
   var jpegMatchedCount=Object.keys(jsonMap).filter(function(p){var l=p.toLowerCase();return l.endsWith(".jpg")||l.endsWith(".jpeg");}).length;
   var infoEl=document.getElementById("folder-info");
   infoEl.style.display="block";
-  var infoMsg="<strong>"+imageFiles.length+"</strong> JPEG images found &nbsp;•&nbsp; <strong>"+jpegMatchedCount+"</strong> JSON sidecars matched &nbsp;•&nbsp; <strong>"+(imageFiles.length-jpegMatchedCount)+"</strong> without JSON";
-  if(nonJpegMatched>0)infoMsg+=" &nbsp;•&nbsp; <span style='color:var(--yellow)'>"+nonJpegMatched+" non-JPEG files (HEIC/PNG/MP4 etc.) skipped</span>";
+  var infoMsg="<strong>"+imageFiles.length+"</strong> JPEG images found &nbsp;&bull;&nbsp; <strong>"+jpegMatchedCount+"</strong> JSON sidecars matched &nbsp;&bull;&nbsp; <strong>"+(imageFiles.length-jpegMatchedCount)+"</strong> without JSON";
+  if(nonJpegMatched>0){
+    infoMsg+=" &nbsp;&bull;&nbsp; <span style='color:var(--yellow)'>"+nonJpegMatched+" non-JPEG files skipped</span>";
+    /* Show detailed skip warning */
+    var skipWarn=document.getElementById("skip-warn");
+    var skipDetail=document.getElementById("skip-warn-detail");
+    var counts={heic:0,png:0,webp:0,jfif:0,mp4:0,other:0};
+    Object.keys(jsonMap).forEach(function(p){
+      var l=p.toLowerCase();
+      if(l.endsWith(".jpg")||l.endsWith(".jpeg"))return;
+      if(l.endsWith(".heic"))counts.heic++;
+      else if(l.endsWith(".png"))counts.png++;
+      else if(l.endsWith(".webp"))counts.webp++;
+      else if(l.endsWith(".jfif"))counts.jfif++;
+      else if(l.endsWith(".mp4"))counts.mp4++;
+      else counts.other++;
+    });
+    var parts=[];
+    if(counts.heic)parts.push(counts.heic+" HEIC");
+    if(counts.png)parts.push(counts.png+" PNG");
+    if(counts.webp)parts.push(counts.webp+" WebP");
+    if(counts.jfif)parts.push(counts.jfif+" JFIF");
+    if(counts.mp4)parts.push(counts.mp4+" MP4");
+    if(counts.other)parts.push(counts.other+" other");
+    skipDetail.textContent=parts.join(", ");
+    skipWarn.style.display="block";
+  } else {
+    document.getElementById("skip-warn").style.display="none";
+  }
+  document.getElementById("preview-card").style.display="block";
   infoEl.innerHTML=infoMsg;
   runBtn.disabled=imageFiles.length===0;
   clearBtn.disabled=false;
@@ -896,6 +942,9 @@ function handleFiles(fileList){
 document.getElementById("btn-clear").addEventListener("click",()=>{
   allFiles={};jsonMap={};imageFiles=[];
   document.getElementById("folder-info").style.display="none";
+  document.getElementById("skip-warn").style.display="none";
+  document.getElementById("preview-card").style.display="none";
+  document.getElementById("preview-result").style.display="none";
   document.getElementById("progress-wrap").style.display="none";
   document.getElementById("log-wrap").style.display="none";
   document.getElementById("stats-bar").style.display="none";
@@ -939,24 +988,24 @@ async function processImage(imgPath,jsonFile,opts){
     if(!exif_dict["Exif"])exif_dict["Exif"]={};
     if(!exif_dict["GPS"])exif_dict["GPS"]={};
     var changed=false;
-    /* MERGE: only write if field is missing */
+    /* MERGE or FORCE: opts.force=true overwrites even existing fields */
     /* 1. photoTakenTime -> DateTimeOriginal (ExifIFD 36867) */
     if(meta.photoTakenTime&&meta.photoTakenTime.timestamp){
-      if(!exif_dict["Exif"][36867]){
+      if(opts.force||!exif_dict["Exif"][36867]){
         exif_dict["Exif"][36867]=tsToExif(meta.photoTakenTime.timestamp);
         changed=true;
       }
     }
     /* 2. description -> ImageDescription (IFD0 270) */
     if(meta.description&&meta.description.trim()){
-      if(!exif_dict["0th"][270]){
+      if(opts.force||!exif_dict["0th"][270]){
         exif_dict["0th"][270]=meta.description.trim();
         changed=true;
       }
     }
     /* 3. title -> XPTitle (IFD0 40091) */
     if(meta.title&&meta.title.trim()){
-      if(!exif_dict["0th"][40091]){
+      if(opts.force||!exif_dict["0th"][40091]){
         exif_dict["0th"][40091]=meta.title.trim();
         changed=true;
       }
@@ -964,14 +1013,14 @@ async function processImage(imgPath,jsonFile,opts){
     /* 4. people -> XPComment + Artist (IFD0 40092, 315) */
     if(opts.people&&meta.people&&meta.people.length>0){
       var names=meta.people.map(p=>p.name).join(", ");
-      if(!exif_dict["0th"][40092]){exif_dict["0th"][40092]=names;changed=true;}
-      if(!exif_dict["0th"][315]){exif_dict["0th"][315]=names;changed=true;}
+      if(opts.force||!exif_dict["0th"][40092]){exif_dict["0th"][40092]=names;changed=true;}
+      if(opts.force||!exif_dict["0th"][315]){exif_dict["0th"][315]=names;changed=true;}
     }
     /* 5. GPS */
     if(opts.gps&&meta.geoData){
       var lat=meta.geoData.latitude;
       var lng=meta.geoData.longitude;
-      if((lat!==0||lng!==0)&&!exif_dict["GPS"][2]){
+      if((lat!==0||lng!==0)&&(opts.force||!exif_dict["GPS"][2])){
         exif_dict["GPS"][1]=lat>=0?"N":"S";
         exif_dict["GPS"][2]=decimalToDMS(lat);
         exif_dict["GPS"][3]=lng>=0?"E":"W";
@@ -986,6 +1035,67 @@ async function processImage(imgPath,jsonFile,opts){
     var ts_used=(meta.photoTakenTime&&meta.photoTakenTime.timestamp)?meta.photoTakenTime.timestamp:null;
     return{status:"ok",data:new_jpeg,path:imgPath,meta_ts:ts_used};}
   catch(e){return{status:"err",msg:String(e)};}}
+
+/* ---- EXIF Inspector ---- */
+document.getElementById("btn-preview").addEventListener("click",async function(){
+  var path=document.getElementById("preview-input").value.trim();
+  var resultEl=document.getElementById("preview-result");
+  resultEl.style.display="block";
+  if(!path){resultEl.innerHTML='<span style="color:var(--red)">Enter an image path first.</span>';return;}
+  var f=allFiles[path];
+  if(!f){
+    /* try case-insensitive match */
+    var keys=Object.keys(allFiles);
+    var match=keys.find(k=>k.toLowerCase()===path.toLowerCase());
+    if(match)f=allFiles[match];
+  }
+  if(!f){resultEl.innerHTML='<span style="color:var(--red)">File not found in loaded folder: '+path+'</span>';return;}
+  resultEl.innerHTML='<span style="color:var(--muted)">Reading EXIF...</span>';
+  try{
+    var buf=await f.arrayBuffer();
+    var arr=new Uint8Array(buf);
+    if(arr[0]!==0xff||arr[1]!==0xd8){resultEl.innerHTML='<span style="color:var(--red)">Not a valid JPEG.</span>';return;}
+    var exif={};
+    try{exif=piexif._decodeExif(arr);}catch(e){exif={};}
+    var lines=[];
+    var ifd0=exif["0th"]||{};
+    var exifIFD=exif["Exif"]||{};
+    var gps=exif["GPS"]||{};
+    function row(label,val,cls){
+      lines.push('<span style="color:var(--blue)">'+label+'</span>  <span class="'+(cls||"")+'">'+val+'</span>');
+    }
+    var hasAny=false;
+    if(exifIFD[36867]){row("DateTimeOriginal   ",exifIFD[36867],"log-ok");hasAny=true;}else{row("DateTimeOriginal   ","(not set)","log-err");}
+    if(ifd0[270]){row("ImageDescription   ",ifd0[270],"log-ok");hasAny=true;}else{row("ImageDescription   ","(not set)","log-err");}
+    if(ifd0[40091]){row("XPTitle            ",ifd0[40091],"log-ok");hasAny=true;}else{row("XPTitle            ","(not set)","log-err");}
+    if(ifd0[315]){row("Artist             ",ifd0[315],"log-ok");hasAny=true;}else{row("Artist             ","(not set)","log-err");}
+    if(ifd0[40092]){row("XPComment          ",ifd0[40092],"log-ok");hasAny=true;}else{row("XPComment          ","(not set)","log-err");}
+    if(gps[2]&&gps[4]){
+      var latD=gps[2];var lngD=gps[4];
+      function dms2dec(d){return d[0][0]/d[0][1]+d[1][0]/(d[1][1]*60)+d[2][0]/(d[2][1]*3600);}
+      var latV=(dms2dec(latD)*(gps[1]==="S"?-1:1)).toFixed(6);
+      var lngV=(dms2dec(lngD)*(gps[3]==="W"?-1:1)).toFixed(6);
+      row("GPS                ",latV+", "+lngV,"log-ok");hasAny=true;
+    }else{row("GPS                ","(not set)","log-err");}
+    var jsonF=jsonMap[path];
+    if(jsonF){
+      try{
+        var jt=await jsonF.text();var jm=JSON.parse(jt);
+        lines.push('');
+        lines.push('<span style="color:var(--muted)">── JSON sidecar ──────────────────────</span>');
+        if(jm.photoTakenTime&&jm.photoTakenTime.formatted)row("photoTakenTime     ",jm.photoTakenTime.formatted);
+        if(jm.geoData&&(jm.geoData.latitude!==0||jm.geoData.longitude!==0))row("geoData            ",jm.geoData.latitude+", "+jm.geoData.longitude);
+        else row("geoData            ","no GPS in JSON","log-err");
+        if(jm.description&&jm.description.trim())row("description        ",jm.description.trim());
+        if(jm.people&&jm.people.length)row("people             ",jm.people.map(p=>p.name).join(", "));
+      }catch(e){}
+    }else{
+      lines.push('');
+      lines.push('<span style="color:var(--yellow)">No JSON sidecar matched for this file.</span>');
+    }
+    resultEl.innerHTML=lines.join('<br>');
+  }catch(e){resultEl.innerHTML='<span style="color:var(--red)">Error reading file: '+e+'</span>';}
+});
 
 /* ---- Organise toggle UI ---- */
 document.getElementById("opt-organise").addEventListener("change",function(){
@@ -1032,6 +1142,7 @@ document.getElementById("btn-run").addEventListener("click",async function(){
     zip:(outputMode==="zip"||outputMode==="both"),
     gps:document.getElementById("opt-gps").checked,
     people:document.getElementById("opt-people").checked,
+    force:document.getElementById("opt-force").checked,
     organise:document.getElementById("opt-organise").checked,
     orgStructure:document.querySelector("input[name=org-structure]:checked")?document.querySelector("input[name=org-structure]:checked").value:"year-month"
   };
