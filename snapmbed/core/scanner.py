@@ -1,106 +1,142 @@
 """
-core/scanner.py — finds all image files and their JSON sidecars.
+SnapMbed — Scanner
+Walks a folder, finds all media files and their JSON sidecars.
+Returns a 5-tuple: (all_files, json_map, media_files, raw_files, stats)
 """
+
 import os
-from pathlib import Path
+import re
 
-JPEG_EXTS   = {".jpg", ".jpeg", ".jpe", ".jfif"}
-IMAGE_EXTS  = JPEG_EXTS | {".png", ".webp", ".heic", ".heif", ".tiff", ".tif", ".bmp"}
-VIDEO_EXTS  = {".mp4", ".mov", ".m4v", ".avi", ".mkv"}
-ALL_MEDIA   = IMAGE_EXTS | VIDEO_EXTS
-WRITABLE_EXTS = JPEG_EXTS | {".png", ".webp", ".heic", ".heif", ".tiff", ".tif", ".mp4", ".mov", ".m4v"}
-SKIP_EXTS   = {".bmp", ".gif", ".avi", ".mkv", ".svg", ".pdf", ".psd"}
-
-
-class ScanResult:
-    def __init__(self):
-        self.media_files: list = []
-        self.json_map: dict = {}
-        self.skipped_formats: dict = {}
-        self.no_json: list = []
-        self.total_json: int = 0
-        self.folder: str = ""
-
-    @property
-    def writable(self):
-        return [p for p in self.media_files
-                if p in self.json_map and Path(p).suffix.lower() in WRITABLE_EXTS]
-
-    @property
-    def matched(self):
-        return len(self.json_map)
-
-    @property
-    def total(self):
-        return len(self.media_files)
+JPEG_EXTS  = {".jpg", ".jpeg", ".jfif", ".jpe"}
+IMAGE_EXTS = JPEG_EXTS | {".png", ".webp", ".tiff", ".tif", ".heic", ".heif"}
+VIDEO_EXTS = {".mp4", ".mov", ".m4v"}
+RAW_EXTS   = {".cr2", ".cr3", ".nef", ".arw", ".dng", ".orf", ".rw2", ".raf", ".pef", ".srw"}
+SKIP_EXTS  = {".gif", ".bmp", ".avi", ".mkv", ".wmv", ".svg", ".pdf", ".psd"}
+ALL_MEDIA  = IMAGE_EXTS | VIDEO_EXTS | RAW_EXTS
 
 
-def _find_json_for(media_rel: str, all_files: dict):
-    lower = media_rel.lower()
-    base_no_ext = os.path.splitext(lower)[0]
-    ext = os.path.splitext(lower)[1]
-    parent_lower = os.path.dirname(lower)
-    stem = os.path.basename(base_no_ext)
+def scan_folder(folder_path):
+    """
+    Walk folder_path recursively.
+    Returns:
+        all_files   dict  rel_path (lower, forward-slash) -> rel_path (original case)
+        json_map    dict  media_rel -> json_rel  (both original-case)
+        media_files list  of rel paths for processable media (IMAGE_EXTS + VIDEO_EXTS)
+        raw_files   list  of rel paths for RAW files (skipped safely)
+        stats       dict  summary counts
+    """
+    all_files_lower = {}   # lower/normalised rel -> original-case rel
+    all_files       = {}   # original-case rel -> abs path
+    json_map        = {}   # media_rel -> json_rel
+    media_files     = []
+    raw_files       = []
+    skipped         = {}
 
-    # Try explicit patterns
-    candidates = [
-        lower + ".json",
-        lower + ".supplemental-metadata.json",
-        lower + ".supp.json",
-        base_no_ext + ".json",
-    ]
-    for c in candidates:
-        if c in all_files:
-            return all_files[c]
-
-    # Fuzzy: any .json in same dir starting with image basename
-    for lp, orig in all_files.items():
-        if not lp.endswith(".json"):
-            continue
-        if os.path.dirname(lp) != parent_lower:
-            continue
-        bn = os.path.basename(lp)
-        if bn.startswith(os.path.basename(lower)) or bn.startswith(stem):
-            return orig
-
-    return None
-
-
-def scan_folder(folder: str, progress_cb=None):
-    result = ScanResult()
-    result.folder = folder
-    all_files: dict = {}
-    media_found: list = []
-
-    for root, dirs, files in os.walk(folder):
+    # ── Pass 1: index every file ──────────────────────────────
+    for root, dirs, files in os.walk(folder_path):
         dirs[:] = [d for d in dirs if not d.startswith(".")]
         for fname in files:
-            fpath = os.path.join(root, fname)
-            rel = os.path.relpath(fpath, folder)
-            all_files[rel.lower().replace("\\", "/")] = rel.replace("\\", "/")
-            ext = os.path.splitext(fname)[1].lower()
-            if ext in ALL_MEDIA:
-                media_found.append(rel.replace("\\", "/"))
+            abs_path = os.path.join(root, fname)
+            rel_orig = os.path.relpath(abs_path, folder_path).replace("\\", "/")
+            rel_low  = rel_orig.lower()
+            all_files_lower[rel_low] = rel_orig
+            all_files[rel_orig]      = abs_path
 
-    result.total_json = sum(1 for p in all_files if p.endswith(".json"))
-    total = len(media_found)
-
-    for i, rel in enumerate(media_found):
-        if progress_cb and i % 50 == 0:
-            progress_cb(i, total, os.path.basename(rel))
-        ext = os.path.splitext(rel)[1].lower()
-        result.media_files.append(rel)
-        if ext in SKIP_EXTS:
-            result.skipped_formats[ext] = result.skipped_formats.get(ext, 0) + 1
+    # ── Pass 2: match JSON sidecars to media ─────────────────
+    for rel_low, rel_orig in all_files_lower.items():
+        if not rel_low.endswith(".json"):
             continue
-        json_rel = _find_json_for(rel, all_files)
-        if json_rel:
-            result.json_map[rel] = json_rel
-        else:
-            result.no_json.append(rel)
-        if ext not in WRITABLE_EXTS and ext not in SKIP_EXTS:
-            result.skipped_formats[ext] = result.skipped_formats.get(ext, 0) + 1
+        media_rel = _find_media_for_json(rel_low, rel_orig, all_files_lower)
+        if media_rel and media_rel not in json_map:
+            json_map[media_rel] = all_files_lower[rel_low]  # original-case json rel
 
-    if progress_cb:
-        progress_cb(total, total, "done")
-    return result
+    # ── Pass 3: classify media ────────────────────────────────
+    for rel_orig in all_files:
+        ext = os.path.splitext(rel_orig.lower())[1]
+        if ext in SKIP_EXTS:
+            skipped[ext] = skipped.get(ext, 0) + 1
+        elif ext in RAW_EXTS:
+            raw_files.append(rel_orig)
+        elif ext in IMAGE_EXTS or ext in VIDEO_EXTS:
+            media_files.append(rel_orig)
+
+    media_files.sort()
+    raw_files.sort()
+
+    # Count formats
+    fmt_counts = {}
+    for p in media_files:
+        ext = os.path.splitext(p.lower())[1]
+        fmt_counts[ext] = fmt_counts.get(ext, 0) + 1
+
+    # Non-processable files that DO have a JSON (informational warning)
+    warned = {}
+    for med_rel in list(json_map.keys()):
+        ext = os.path.splitext(med_rel.lower())[1]
+        if ext not in IMAGE_EXTS and ext not in VIDEO_EXTS:
+            warned[ext] = warned.get(ext, 0) + 1
+
+    jpeg_matched = sum(
+        1 for p in media_files if p in json_map
+    )
+
+    stats = {
+        "total_media":  len(media_files),
+        "matched_json": jpeg_matched,
+        "no_json":      len(media_files) - jpeg_matched,
+        "raw_count":    len(raw_files),
+        "skipped":      skipped,
+        "fmt_counts":   fmt_counts,
+        "warned":       warned,
+    }
+
+    return all_files, json_map, media_files, raw_files, stats
+
+
+def _find_media_for_json(json_low, json_orig, all_files_lower):
+    """
+    Try all known Google Takeout JSON naming patterns.
+    Returns the lower-normalised rel path of the matching media file, or None.
+    """
+    MEDIA_EXT_PAT = (
+        r"(jpg|jpeg|jfif|jpe|png|webp|tiff?|heic|heif"
+        r"|mp4|mov|m4v|cr2|cr3|nef|arw|dng|orf|rw2|raf|pef|srw)"
+    )
+
+    # Pattern 1: strip .json directly  →  photo.jpg
+    stripped = json_low[:-5]
+    if stripped in all_files_lower:
+        return stripped
+
+    base = json_low[:-5]  # everything before .json
+
+    # Pattern 2: .supplemental-metadata.json
+    m = re.match(
+        rf'^(.+\.{MEDIA_EXT_PAT})\.supplemental-metadata$',
+        base, re.IGNORECASE)
+    if m and m.group(1) in all_files_lower:
+        return m.group(1)
+
+    # Pattern 3: truncated supplemental  (.supp, .supplem, etc.)
+    m = re.match(
+        rf'^(.+\.{MEDIA_EXT_PAT})\.supp(?:l(?:e(?:m(?:e(?:n(?:t(?:a(?:l(?:-metadata)?)?)?)?)?)?)?)?)?$',
+        base, re.IGNORECASE)
+    if m and m.group(1) in all_files_lower:
+        return m.group(1)
+
+    # Pattern 4: any suffix after known image ext (Google truncation)
+    m = re.match(
+        rf'^(.+\.{MEDIA_EXT_PAT})[^/\\]*$',
+        base, re.IGNORECASE)
+    if m and m.group(1) in all_files_lower:
+        return m.group(1)
+
+    # Pattern 5: base name only  photo.json → photo.jpg
+    name_no_ext = os.path.splitext(json_low)[0]
+    for ext in (".jpg", ".jpeg", ".jfif", ".jpe", ".png", ".webp",
+                ".tiff", ".tif", ".heic", ".heif", ".mp4", ".mov", ".m4v"):
+        c = name_no_ext + ext
+        if c in all_files_lower:
+            return c
+
+    return None

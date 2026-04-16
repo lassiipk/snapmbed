@@ -499,7 +499,19 @@ class SnapMbedApp(ctk.CTk):
         from core.scanner import scan_folder
         from core.cleaner import load_state
 
-        af, jm, mf, rf, stats = scan_folder(self._folder_path)
+        try:
+            result = scan_folder(self._folder_path)
+        except Exception as e:
+            self._log(f"[ERR] Scan failed: {e}", "err")
+            self._clear_btn.configure(state="normal")
+            return
+
+        # Support plain tuple and named-tuple returns
+        try:
+            af, jm, mf, rf, stats = result
+        except TypeError:
+            af, jm, mf, rf, stats = result[0], result[1], result[2], result[3], result[4]
+
         self._all_files   = af
         self._json_map    = jm
         self._media_files = mf
