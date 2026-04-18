@@ -1,0 +1,21 @@
+{
+  "source_folder": "",
+  "output_folder": "",
+  "output_mode": "inplace",
+  "dry_run": false,
+  "force_reprocess": false,
+  "backup_originals": false,
+  "verify_after_write": true,
+  "unmatched_policy": "keep",
+  "gps_zero_policy": "skip",
+  "timezone": "utc",
+  "fields": {
+    "photo_taken_date": { "enabled": true,  "conflict_policy": "skip" },
+    "creation_date":    { "enabled": false, "conflict_policy": "skip" },
+    "gps":              { "enabled": true,  "conflict_policy": "skip" },
+    "description":      { "enabled": true,  "conflict_policy": "skip" },
+    "title":            { "enabled": true,  "conflict_policy": "skip" },
+    "people":           { "enabled": true,  "conflict_policy": "skip" },
+    "google_url":       { "enabled": false, "conflict_policy": "skip" }
+  }
+}

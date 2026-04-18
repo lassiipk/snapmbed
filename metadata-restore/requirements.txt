@@ -1,0 +1,17 @@
+# Google Takeout Metadata Restore Tool — Python dependencies
+#
+# Core dependencies (required):
+#   None — the core logic uses only Python standard library + exiftool (external)
+#
+# Optional but recommended:
+tqdm>=4.65.0       # Progress bar in CLI mode (gracefully skipped if not installed)
+#
+# ─────────────────────────────────────────────────────────
+# EXTERNAL DEPENDENCY (not pip-installable):
+#
+#   exiftool by Phil Harvey
+#   Download: https://exiftool.org
+#   Windows:  Download "exiftool-XX.XX_64.zip", extract exiftool.exe,
+#             place it somewhere on your system PATH.
+#             (e.g. C:\Windows\ or C:\Tools\exiftool\)
+# ─────────────────────────────────────────────────────────
