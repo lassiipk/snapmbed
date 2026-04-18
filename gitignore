@@ -1,0 +1,62 @@
+# ─────────────────────────────────────────────
+# Python cache
+# ─────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# ─────────────────────────────────────────────
+# Tool-generated files
+# ─────────────────────────────────────────────
+
+# Progress tracking file (lives inside processed folder)
+._metadata_restore_progress.json
+
+# Log files
+metadata_restore_*.log
+failed_files_*.txt
+
+# Unmatched JSON review folder
+_unmatched_review/
+
+# Original file backups
+*.bak
+
+# Output zip builds
+*.zip
+
+# ─────────────────────────────────────────────
+# Virtual environments
+# ─────────────────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+ENV/
+
+# ─────────────────────────────────────────────
+# VS Code
+# ─────────────────────────────────────────────
+.vscode/
+
+# ─────────────────────────────────────────────
+# PyCharm / JetBrains
+# ─────────────────────────────────────────────
+.idea/
+*.iml
+
+# ─────────────────────────────────────────────
+# Windows system files
+# ─────────────────────────────────────────────
+Thumbs.db
+desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+
+# ─────────────────────────────────────────────
+# Saved user config files (optional — remove
+# this line if you WANT to commit your settings)
+# ─────────────────────────────────────────────
+*.user.json
