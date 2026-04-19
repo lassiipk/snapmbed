@@ -233,7 +233,7 @@ def write_metadata(
             shutil.copy2(media_path, output_path)
 
     # Build exiftool arguments
-    args = ["exiftool", "-overwrite_original", "-P"]
+    args = ["exiftool", "-overwrite_original", "-P", "-m"]  # -m = ignore minor EXIF errors
     field_actions = []  # list of (tag_name, value, field_label)
 
     # ── Single bulk read of all existing tags (1 exiftool call, not per-field) ──

@@ -56,11 +56,16 @@ REM ── Install Python packages ──
 echo [3/3] Installing Python packages...
 python -m pip install --upgrade pip --quiet
 python -m pip install tqdm --quiet
-python -m pip install tzdata --quite
 if errorlevel 1 (
     echo   WARNING: Could not install tqdm. The tool will still work without it.
 ) else (
     echo   tqdm installed OK (progress bar for CLI mode).
+)
+python -m pip install tzdata --quiet
+if errorlevel 1 (
+    echo   WARNING: Could not install tzdata. UTC and local timezone will still work.
+) else (
+    echo   tzdata installed OK (named timezone support e.g. Asia/Karachi).
 )
 
 echo.

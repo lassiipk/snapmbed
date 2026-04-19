@@ -73,14 +73,21 @@ def check_tkinter():
 
 
 def check_zoneinfo():
-    print("\n[5] zoneinfo (timezone support)")
+    print("\n[5] zoneinfo / tzdata (timezone support)")
     try:
-        from zoneinfo import ZoneInfo
-        ZoneInfo("UTC")
-        _ok("zoneinfo available (Python 3.9+ built-in)")
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
     except ImportError:
-        _warn("zoneinfo not found — named timezone support limited")
+        _warn("zoneinfo not available — named timezone support limited")
         _info("UTC and 'local' timezone will still work.")
+        return
+    try:
+        ZoneInfo("UTC")
+        _ok("zoneinfo + tzdata available — all timezones supported")
+    except Exception:
+        _warn("zoneinfo is present but tzdata is not installed")
+        _info("Named timezones like Asia/Karachi will not work until you run:")
+        _info("  pip install tzdata")
+        _info("UTC and 'local' timezone will still work fine.")
 
 
 def check_project_files():

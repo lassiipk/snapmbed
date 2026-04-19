@@ -132,10 +132,13 @@ class Engine:
         r.info("Phase 1: Scanning folder tree...")
         self.progress_callback(0, 1, "Scanning folder tree...")
         scan = scan_folder(source, cfg.extra_extensions)
-        r.info(f"  Found {scan.total_media} media files, {scan.total_json} JSON sidecars")
+        r.info(f"  Media files found        : {scan.total_media}")
+        r.info(f"  JSON files checked       : {scan.json_candidates_checked}")
+        r.info(f"  Takeout sidecars found   : {scan.total_json}")
+        r.info(f"  Non-Takeout JSONs skipped: {scan.json_skipped_non_takeout}")
 
         if scan.total_json == 0:
-            r.warning("No supplemental-metadata.json files found. Nothing to do.")
+            r.warning("No Google Takeout sidecar JSON files found. Nothing to do.")
             return {"status": "nothing_to_do"}
 
         # ── 2. Match ──
